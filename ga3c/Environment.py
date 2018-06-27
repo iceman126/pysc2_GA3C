@@ -58,7 +58,6 @@ class Environment:
     def _update_frame_q(self, observation):
         if self.frame_q.full():
             self.frame_q.get()
-        # image = Environment._preprocess(frame)
         # print (observation["screen"])
         self.frame_q.put(observation)
 
@@ -67,7 +66,7 @@ class Environment:
         num_actions["base_action"] = len(actions.FUNCTIONS)
         for act_type in actions.TYPES:
             if act_type.name in ("screen", "screen2", "minimap"):
-                num_actions[act_type.name] = (Config.IMAGE_SIZE, Config.IMAGE_SIZE)
+                num_actions[act_type.name] = (self.game.image_size, self.game.image_size)
             else:
                 num_actions[act_type.name] = act_type.sizes[0]
         return num_actions

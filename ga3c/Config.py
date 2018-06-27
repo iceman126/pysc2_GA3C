@@ -26,13 +26,13 @@
 
 class Config:
 
-    DEBUG = False
+    DEBUG = True
 
     #########################################################################
     # Game configuration
 
     # Name of the game, with version (e.g. PongDeterministic-v0)
-    SC2_MAP_NAME = 'MoveToBeacon'
+    SC2_MAP_NAME = 'CollectMineralShards'
 
     # Enable to see the trained agent in action
     PLAY_MODE = False
@@ -52,11 +52,11 @@ class Config:
     
     # If the dynamic configuration is on, these are the initial values.
     # Number of Agents
-    AGENTS = 2
+    AGENTS = 25
     # Number of Predictors
     PREDICTORS = 2
     # Number of Trainers
-    TRAINERS = 2
+    TRAINERS = 10
 
     # Device
     DEVICE = 'gpu:0'
@@ -73,41 +73,42 @@ class Config:
     DISCOUNT = 0.99
     
     # Tmax
-    TIME_MAX = 10
+    TIME_MAX = 16
     
     # Reward Clipping
+    REWARD_CLIPPING = False
     REWARD_MIN = -1
     REWARD_MAX = 1
 
     # Max size of the queue
-    MAX_QUEUE_SIZE = 100
-    PREDICTION_BATCH_SIZE = 32
+    MAX_QUEUE_SIZE = 200
+    PREDICTION_BATCH_SIZE = 64
 
     # Input of the DNN
     STACKED_FRAMES = 1
-    IMAGE_WIDTH = 64
-    IMAGE_HEIGHT = 64
-    IMAGE_SIZE = 32
+    IMAGE_SIZE = 64
 
     # Total number of episodes and annealing frequency
-    EPISODES = 400000
-    ANNEALING_EPISODE_COUNT = 400000
+    EPISODES = 300000
+    ANNEALING_EPISODE_COUNT = 100000
 
     # Entropy regualrization hyper-parameter
-    BETA_START = 0.001
+    BETA_START = 0.05
     BETA_END = 0.001
 
     # Value loss hyper-parameter
-    VL_COEF = 0.5
+    VL_COEF = 1.0
+
+    OPTIMIZER = "rmsprop"
 
     # Learning rate
-    LEARNING_RATE_START = 0.0002
-    LEARNING_RATE_END = 0.0002
+    LEARNING_RATE_START = 0.0007
+    LEARNING_RATE_END = 0.0007
 
     # RMSProp parameters
     RMSPROP_DECAY = 0.99
     RMSPROP_MOMENTUM = 0.0
-    RMSPROP_EPSILON = 0.1
+    RMSPROP_EPSILON = 1e-3
 
     # Dual RMSProp - we found that using a single RMSProp for the two cost function works better and faster
     DUAL_RMSPROP = False
@@ -118,13 +119,13 @@ class Config:
     # Epsilon (regularize policy lag in GA3C)
     LOG_EPSILON = 1e-6
     # Training min batch size - increasing the batch size increases the stability of the algorithm, but make learning slower
-    TRAINING_MIN_BATCH_SIZE = 64
+    TRAINING_MIN_BATCH_SIZE = 128
     
     #########################################################################
     # Log and save
 
     # Enable TensorBoard
-    TENSORBOARD = False
+    TENSORBOARD = True
     # Update TensorBoard every X training steps
     TENSORBOARD_UPDATE_FREQUENCY = 1000
 
@@ -133,11 +134,14 @@ class Config:
     # Save every SAVE_FREQUENCY episodes
     SAVE_FREQUENCY = 1000
     
+    # Interval of logging agent performance during training 
+    LOG_EPISODE_SCORES_INTERVAL = 50
     # Print stats every PRINT_STATS_FREQUENCY episodes
     PRINT_STATS_FREQUENCY = 1
     # The window to average stats
     STAT_ROLLING_MEAN_WINDOW = 1000
 
+    EPISDOES_LOG_FILENAME = 'episode_scores.txt'
     # Results filename
     RESULTS_FILENAME = 'results.txt'
     # Network checkpoint name

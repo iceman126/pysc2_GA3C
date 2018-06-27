@@ -48,7 +48,6 @@ class ProcessAgent(Process):
 
         self.env = Environment()
         self.num_actions = self.env.get_num_actions()
-        # self.actions = np.arange(self.num_actions)
 
         self.discount_factor = Config.DISCOUNT
         # one frame at a time
@@ -59,17 +58,12 @@ class ProcessAgent(Process):
     def _accumulate_rewards(experiences, discount_factor, terminal_reward):
         reward_sum = terminal_reward
         for t in reversed(range(0, len(experiences)-1)):
-            # r = np.clip(experiences[t].reward, Config.REWARD_MIN, Config.REWARD_MAX)        # clip the rewards
-            reward_sum = discount_factor * reward_sum + experiences[t].reward
+            r = experiences[t].reward
+            if Config.REWARD_CLIPPING:
+                r = np.clip(experiences[t].reward, Config.REWARD_MIN, Config.REWARD_MAX)        # clip the rewards
+            reward_sum = discount_factor * reward_sum + r
             experiences[t].reward = reward_sum
         return experiences[:-1]                                                             # discard the last exp (last exp belongs to next batch)
-
-    def convert_data(self, experiences):
-        x_ = np.array([exp.state for exp in experiences])
-        # a_ = np.eye(self.num_actions)[np.array([exp.action for exp in experiences])].astype(np.float32)         # get one-hot action array
-        a_ = np.array([exp.action for exp in experiences])
-        r_ = np.array([exp.reward for exp in experiences])
-        return x_, r_, a_
 
     def predict(self, state):
         # put the state in the prediction q
@@ -123,10 +117,11 @@ class ProcessAgent(Process):
 
                 updated_exps = ProcessAgent._accumulate_rewards(experiences, self.discount_factor, terminal_reward)
                 indexes = np.argpartition(np.array(updated_exps[-1].prediction["base_action"]), -3)[-3:]
-                print ("{0}\tprob: {1:.4f}, pos: {5}, {3}, {4},value: {2:.4f}".format(updated_exps[-1].action["base_action"], \
-                    updated_exps[-1].prediction["base_action"][updated_exps[-1].action["base_action"]], updated_exps[-1].reward, \
-                    indexes, updated_exps[-1].prediction["base_action"][indexes], updated_exps[-1].action["screen"]
-                ))
+                if Config.DEBUG:
+                    print ("{0}\tprob: {1:.4f}, screen: {5}, minimap:{6}, {3}, {4},value: {2:.4f}".format(updated_exps[-1].action["base_action"], \
+                        updated_exps[-1].prediction["base_action"][updated_exps[-1].action["base_action"]], updated_exps[-1].reward, \
+                        indexes, updated_exps[-1].prediction["base_action"][indexes], updated_exps[-1].action["screen"], updated_exps[-1].action["minimap"]
+                    ))
                 yield updated_exps, reward_sum
 
                 # reset the tmax count
@@ -149,7 +144,7 @@ class ProcessAgent(Process):
             for exps, reward_sum in self.run_episode():
                 total_reward += reward_sum
                 total_length += len(exps) + 1  # +1 for last frame that we drop
-                if Config.DEBUG:
-                    print ("Agent: Put episode into queue. Episode Length:{}".format(total_length))
+                # if Config.DEBUG:
+                #     print ("Agent: Put episode into queue. Episode Length:{}".format(total_length))
                 self.training_q.put(exps)
             self.episode_log_q.put((datetime.now(), total_reward, total_length))

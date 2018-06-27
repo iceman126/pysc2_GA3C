@@ -60,10 +60,11 @@ class ProcessStats(Process):
         return np.ceil(self.training_count.value / (time.time() - self.start_time))
 
     def run(self):
-        with open(Config.RESULTS_FILENAME, 'a') as results_logger:
+        with open(Config.RESULTS_FILENAME, 'a') as results_logger, open(Config.EPISDOES_LOG_FILENAME, 'a') as eval_logger:
             rolling_frame_count = 0
             rolling_reward = 0
-            results_q = queueQueue(maxsize=Config.STAT_ROLLING_MEAN_WINDOW)         # single process queue
+            results_q = queueQueue(maxsize=Config.STAT_ROLLING_MEAN_WINDOW)
+            episode_scores = []
             
             self.start_time = time.time()
             first_time = datetime.now()
@@ -85,6 +86,12 @@ class ProcessStats(Process):
                     first_time = old_episode_time
 
                 results_q.put((episode_time, reward, length))
+
+                episode_scores.append(reward)
+                if len(episode_scores) >= 1000:
+                    eval_logger.write("{} {} {} {}\n".format(self.episode_count.value, np.max(episode_scores[-100:]), np.mean(episode_scores[-100:]), np.min(episode_scores[-100:])))
+                    eval_logger.flush()
+                    episode_scores = []
 
                 if self.episode_count.value % Config.SAVE_FREQUENCY == 0:
                     self.should_save_model.value = 1

@@ -33,15 +33,15 @@ class GameManager:
     def __init__(self, map_name, image_size):
         self.map_name = map_name
         self.image_size = image_size
-        self.env = self._make_env(self.map_name, self.image_size)
+        self.env = self._make_env()
         self.reset()
 
-    def _make_env(self, map_name, image_size):
+    def _make_env(self):
         agent_interface = features.parse_agent_interface_format(
-            feature_screen=image_size,
-            feature_minimap=image_size
+            feature_screen=self.image_size,
+            feature_minimap=self.image_size
         )
-        env = sc2_env.SC2Env(map_name=map_name,
+        env = sc2_env.SC2Env(map_name=self.map_name,
                              step_mul=8,
                              agent_interface_format=agent_interface,
                              visualize=False
@@ -68,19 +68,13 @@ class GameManager:
 
     @staticmethod
     def _process_state(state):
+        # Since I don't know how to manipulate NumpyNamedArray data, so convert them to numpy array at first place
         processed_screen = np.transpose(np.asarray(state.observation["feature_screen"]), [1, 2, 0])
         processed_minimap = np.transpose(np.asarray(state.observation["feature_minimap"]), [1, 2, 0])
         ns = np.asarray(state.observation["player"])
-
-        np.set_printoptions(threshold=np.nan)
-
-        # print (np.shape(processed_screen))
-        # print (processed_screen)
         
         available_actions = np.zeros([len(actions.FUNCTIONS)], dtype=np.float32)
         available_actions[np.asarray(state.observation["available_actions"])] = 1
-
-        # print (available_actions)
 
         ob = {"screen": processed_screen, "minimap": processed_minimap, "ns": ns, "available_actions": available_actions}
         info = {"reward": state.reward, "done": state.last()}

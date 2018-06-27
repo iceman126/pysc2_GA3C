@@ -95,10 +95,9 @@ class Server:
         self.stats.training_count.value += 1
         self.dynamic_adjustment.temporal_training_count += 1
 
-        '''
         if Config.TENSORBOARD and self.stats.training_count.value % Config.TENSORBOARD_UPDATE_FREQUENCY == 0:
-            self.model.log(x_, r_, a_)
-        '''
+            self.model.log(exps)
+        
 
     def save_model(self):
         self.model.save(self.stats.episode_count.value)

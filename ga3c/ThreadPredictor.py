@@ -67,7 +67,6 @@ class ThreadPredictor(Thread):
             while size < Config.PREDICTION_BATCH_SIZE and not self.server.prediction_q.empty():
                 ids[size], state_dict = self.server.prediction_q.get()
                 screens[size] = state_dict["screen"]
-                
                 minimaps[size] = state_dict["minimap"]
                 nss[size] = state_dict["ns"]
                 avals[size] = state_dict["available_actions"]

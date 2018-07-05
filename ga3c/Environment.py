@@ -51,6 +51,7 @@ class Environment:
 
     def _get_current_state(self):
         if not self.frame_q.full():
+            raise Exception("Current state should not be None")
             return None  # frame queue is not full yet.
         x_ = self.frame_q.queue[0]
         return x_
@@ -82,10 +83,10 @@ class Environment:
         observation, reward, done, _ = self.game.step(action)
 
         self.total_reward += reward
-        self._update_frame_q(observation)
+        # self._update_frame_q(observation)
 
-        self.previous_state = self.current_state
-        self.current_state = self._get_current_state()
+        self.previous_state = self.current_state.copy()
+        self.current_state = observation
         return reward, done
 
 

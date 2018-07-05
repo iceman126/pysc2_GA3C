@@ -26,13 +26,13 @@
 
 class Config:
 
-    DEBUG = True
+    DEBUG = False
 
     #########################################################################
     # Game configuration
 
     # Name of the game, with version (e.g. PongDeterministic-v0)
-    SC2_MAP_NAME = 'CollectMineralShards'
+    SC2_MAP_NAME = 'DefeatRoaches'
 
     # Enable to see the trained agent in action
     PLAY_MODE = False
@@ -86,29 +86,29 @@ class Config:
 
     # Input of the DNN
     STACKED_FRAMES = 1
-    IMAGE_SIZE = 64
+    IMAGE_SIZE = 32
 
     # Total number of episodes and annealing frequency
-    EPISODES = 300000
-    ANNEALING_EPISODE_COUNT = 100000
+    EPISODES = 2000000
+    ANNEALING_EPISODE_COUNT = 300000
 
     # Entropy regualrization hyper-parameter
-    BETA_START = 0.05
+    BETA_START = 0.001
     BETA_END = 0.001
 
     # Value loss hyper-parameter
     VL_COEF = 1.0
 
-    OPTIMIZER = "rmsprop"
+    OPTIMIZER = "adam"
 
     # Learning rate
-    LEARNING_RATE_START = 0.0007
-    LEARNING_RATE_END = 0.0007
+    LEARNING_RATE_START = 0.00003
+    LEARNING_RATE_END = 0.00003
 
     # RMSProp parameters
     RMSPROP_DECAY = 0.99
     RMSPROP_MOMENTUM = 0.0
-    RMSPROP_EPSILON = 1e-3
+    RMSPROP_EPSILON = 1e-2
 
     # Dual RMSProp - we found that using a single RMSProp for the two cost function works better and faster
     DUAL_RMSPROP = False
@@ -127,7 +127,7 @@ class Config:
     # Enable TensorBoard
     TENSORBOARD = True
     # Update TensorBoard every X training steps
-    TENSORBOARD_UPDATE_FREQUENCY = 1000
+    TENSORBOARD_UPDATE_FREQUENCY = 500
 
     # Enable to save models every SAVE_FREQUENCY episodes
     SAVE_MODELS = True
@@ -151,6 +151,6 @@ class Config:
     # More experimental parameters here
     
     # Minimum policy
-    MIN_POLICY = 0.0
+    MIN_POLICY = 0.000001
     # Use log_softmax() instead of log(softmax())
     USE_LOG_SOFTMAX = False

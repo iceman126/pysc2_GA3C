@@ -67,12 +67,7 @@ class NetworkVP:
                     vars = tf.global_variables()
                     self.saver = tf.train.Saver({var.name: var for var in vars}, max_to_keep=0)
 
-    def _create_graph(self):
-        self.global_step = tf.Variable(0, trainable=False, name='step')
-        self.screen = tf.placeholder(tf.float32, (None, self.img_size, self.img_size, Config.NUM_SCREEN_FEATURES))
-        self.minimap = tf.placeholder(tf.float32, (None, self.img_size, self.img_size, Config.NUM_MINIMAP_FEATURES))
-        self.ns = tf.placeholder(tf.float32, (None, Config.NUM_NONSPATIAL_FEATURES))
-        self.act_mask = tf.placeholder(tf.float32, (None, self.num_actions["base_action"]))
+    def _atari(self):
         screen_processed = self._embed_features(self.screen, features.SCREEN_FEATURES, "screen")
         minimap_processed = self._embed_features(self.minimap, features.MINIMAP_FEATURES, "minimap")
         screen_conv1 = tf.layers.conv2d(
@@ -80,10 +75,10 @@ class NetworkVP:
                 filters=16,
                 kernel_size=8,
                 strides=4,
-                # kernel_initializer=tf.glorot_uniform_initializer(),
-                kernel_initializer=tf.orthogonal_initializer(),
+                kernel_initializer=tf.glorot_normal_initializer(),
+                # kernel_initializer=tf.orthogonal_initializer(),
                 name="screen_conv1",
-                padding="valid",
+                padding="same",
                 activation=tf.nn.relu
         )
         screen_conv2 = tf.layers.conv2d(
@@ -91,10 +86,10 @@ class NetworkVP:
                 filters=32,
                 kernel_size=4,
                 strides=2,
-                #kernel_initializer=tf.glorot_uniform_initializer(),
-                kernel_initializer=tf.orthogonal_initializer(),
+                kernel_initializer=tf.glorot_normal_initializer(),
+                # kernel_initializer=tf.orthogonal_initializer(),
                 name="screen_conv2",
-                padding="valid",
+                padding="same",
                 activation=tf.nn.relu
         )
         minimap_conv1 = tf.layers.conv2d(
@@ -102,10 +97,10 @@ class NetworkVP:
                 filters=16,
                 kernel_size=8,
                 strides=4,
-                # kernel_initializer=tf.glorot_uniform_initializer(),
-                kernel_initializer=tf.orthogonal_initializer(),
+                kernel_initializer=tf.glorot_normal_initializer(),
+                # kernel_initializer=tf.orthogonal_initializer(),
                 name="minimap_conv1",
-                padding="valid",
+                padding="same",
                 activation=tf.nn.relu
         )
         minimap_conv2 = tf.layers.conv2d(
@@ -113,10 +108,10 @@ class NetworkVP:
                 filters=32,
                 kernel_size=4,
                 strides=2,
-                # kernel_initializer=tf.glorot_uniform_initializer(),
-                kernel_initializer=tf.orthogonal_initializer(),
+                kernel_initializer=tf.glorot_normal_initializer(),
+                # kernel_initializer=tf.orthogonal_initializer(),
                 name="minimap_conv2",
-                padding="valid",
+                padding="same",
                 activation=tf.nn.relu
         )
         
@@ -124,45 +119,155 @@ class NetworkVP:
         minimap_flatten = tf.layers.flatten(minimap_conv2, name="minimap_flatten")
 
         ns_fc = tf.layers.dense(self.ns, 256,
-            # kernel_initializer=tf.glorot_uniform_initializer(),
-            kernel_initializer=tf.orthogonal_initializer(),
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
             activation=tf.nn.tanh,
             name="ns_fc"
         )
 
-        fc_concat = tf.concat([screen_flatten, minimap_flatten, ns_fc], axis=1)
+        # fc_concat = tf.concat([screen_flatten, minimap_flatten, ns_fc], axis=1)
+        fc_concat = screen_flatten
 
         state_representation = tf.layers.dense(fc_concat, 256,
-            # kernel_initializer=tf.glorot_uniform_initializer(),
-            kernel_initializer=tf.orthogonal_initializer(),
+            kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
             activation=tf.nn.relu,
             name="state_representation"
         )
 
-        self.pi = tf.layers.dense(state_representation, self.num_actions["base_action"],
-            # kernel_initializer=tf.glorot_uniform_initializer(),
-            kernel_initializer=tf.orthogonal_initializer(),
-            activation=tf.nn.softmax,
+        self.logits_pi = tf.layers.dense(state_representation, self.num_actions["base_action"],
+            kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            # activation=tf.nn.softmax,
+            activation=None,
             name="pi"
-        ) 
+        )
+        self.pi = tf.nn.softmax(self.logits_pi)
 
         self.v = tf.layers.dense(state_representation, 1,
-            # kernel_initializer=tf.glorot_uniform_initializer(),
-            kernel_initializer=tf.orthogonal_initializer(),
+            kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
             activation=None,
             name="vf"
         )
 
         self.args = dict()
+        self.args_raw = dict()
         for act_type in actions.TYPES:
             if act_type.name in ("screen", "screen2", "minimap"):
                 # arg_out = self._fc_spatial_argument(state_representation, act_type.name)
-                arg_out = self._non_spatial_argument(state_representation, Config.IMAGE_SIZE**2, act_type.name)
+                raw_logits = self._non_spatial_argument(state_representation, Config.IMAGE_SIZE**2, act_type.name)
             else:
-                arg_out = self._non_spatial_argument(state_representation, act_type.sizes[0], act_type.name)
-            self.args[act_type.name] = arg_out
+                raw_logits = self._non_spatial_argument(state_representation, act_type.sizes[0], act_type.name)
+            self.args[act_type.name] = tf.nn.softmax(raw_logits)
+            self.args_raw[act_type.name] = raw_logits
 
-        self.value = tf.squeeze(self.v, axis=[1])
+    def _fully_conv(self):
+        screen_processed = self._embed_features(self.screen, features.SCREEN_FEATURES, "screen")
+        minimap_processed = self._embed_features(self.minimap, features.MINIMAP_FEATURES, "minimap")
+        screen_conv1 = tf.layers.conv2d(
+            screen_processed,
+            filters=16,
+            kernel_size=5,
+            strides=1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            name="screen_conv1",
+            padding="same",
+            activation=tf.nn.relu
+        )
+        screen_conv2 = tf.layers.conv2d(
+            screen_conv1,
+            filters=24,
+            kernel_size=3,
+            strides=1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            name="screen_conv2",
+            padding="same",
+            activation=tf.nn.relu
+        )
+        
+        minimap_conv1 = tf.layers.conv2d(
+            minimap_processed,
+            filters=16,
+            kernel_size=5,
+            strides=1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            name="minimap_conv1",
+            padding="same",
+            activation=tf.nn.relu
+        )
+        minimap_conv2 = tf.layers.conv2d(
+            minimap_conv1,
+            filters=24,
+            kernel_size=3,
+            strides=1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            name="minimap_conv2",
+            padding="same",
+            activation=tf.nn.relu
+        )
+
+        ns_broadcast = tf.tile( tf.expand_dims(tf.expand_dims(self.ns, 1), 2), tf.stack([1, Config.IMAGE_SIZE, Config.IMAGE_SIZE, 1]) )
+
+        # state_representation = tf.concat([screen_conv2, minimap_conv2], axis=3)
+        state_representation = tf.concat([screen_conv2, minimap_conv2, ns_broadcast], axis=3)
+        state_representation_flattened = tf.layers.flatten(state_representation, name="state_representation_flattened")
+
+        fc1 = tf.layers.dense(state_representation_flattened, 256,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            activation=tf.nn.relu,
+            name="fc1"
+        )
+
+        self.logits_pi = tf.layers.dense(fc1, self.num_actions["base_action"],
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            # activation=tf.nn.softmax,
+            activation=None,
+            name="pi"
+        )
+        self.pi = tf.nn.softmax(self.logits_pi)
+
+        self.v = tf.layers.dense(fc1, 1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            activation=None,
+            name="vf"
+        )
+
+        self.args = dict()
+        self.args_raw = dict()
+        for act_type in actions.TYPES:
+            if act_type.name in ("screen", "screen2", "minimap"):
+                raw_logits = self._fully_conv_spatial_argument(state_representation, act_type.name)
+            else:
+                raw_logits = self._non_spatial_argument(state_representation_flattened, act_type.sizes[0], act_type.name)
+            self.args[act_type.name] = tf.nn.softmax(raw_logits)
+            self.args_raw[act_type.name] = raw_logits
+
+    def _create_graph(self):
+        self.global_step = tf.Variable(0, trainable=False, name='step')
+        self.screen = tf.placeholder(tf.float32, (None, self.img_size, self.img_size, Config.NUM_SCREEN_FEATURES))
+        self.minimap = tf.placeholder(tf.float32, (None, self.img_size, self.img_size, Config.NUM_MINIMAP_FEATURES))
+        self.ns = tf.placeholder(tf.float32, (None, Config.NUM_NONSPATIAL_FEATURES))
+        self.act_mask = tf.placeholder(tf.float32, (None, self.num_actions["base_action"]))
+        # self._atari()
+        self._fully_conv()
+        
+       
+        self.value = tf.squeeze(self.v, axis=1)
         self.acts = tf.placeholder(tf.int32, name="acts", shape=[None])
         self.act_args = {act_type.name: tf.placeholder(tf.int32, name="{}".format(act_type.name), shape=[None]) for act_type in actions.TYPES}
         self.act_args_used = {act_type.name: tf.placeholder(tf.float32, name="{}_used".format(act_type.name), shape=[None]) for act_type in actions.TYPES}
@@ -171,25 +276,53 @@ class NetworkVP:
         self.var_beta = tf.placeholder(tf.float32, name='beta', shape=[])
         self.var_learning_rate = tf.placeholder(tf.float32, name='lr', shape=[])
 
-        acts_one_hot = tf.one_hot(self.acts, self.num_actions["base_action"])
+        # acts_one_hot = tf.one_hot(self.acts, self.num_actions["base_action"])
 
+        # valid_action_prob_sum = tf.reduce_sum(self.logits_pi * self.act_mask, axis=-1, keepdims=True)       # sum all valid non spatial action prob
+        # masked_action_prob = (self.logits_pi * self.act_mask) / valid_action_prob_sum
+        # neg_tensor = tf.cond(tf.equal(self.act_mask, tf.constant(1.0)), lambda: tf.constant(0), lambda: tf.constant(-999999.0))
+        neg_tensor = tf.to_float(tf.equal(self.act_mask, tf.constant(0.0))) * tf.constant(-99999.0)
+        action_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.acts, logits=self.logits_pi * self.act_mask + neg_tensor)
+        for act_type in actions.TYPES:
+            action_log_prob += tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.act_args[act_type.name], logits=self.args_raw[act_type.name]) * self.act_args_used[act_type.name]
+        
+
+        cost_entropy = tf.reduce_sum(-tf.nn.softmax(self.logits_pi) * tf.nn.log_softmax(self.logits_pi), axis=-1)
+        for act_type in actions.TYPES:
+            cost_entropy += tf.reduce_sum(-tf.nn.softmax(self.args_raw[act_type.name]) * tf.nn.log_softmax(self.args_raw[act_type.name]), axis=-1) * self.act_args_used[act_type.name]
+        cost_entropy = tf.reduce_sum(cost_entropy)
+        
+
+
+        '''
         # action log probability
         valid_action_prob_sum = tf.reduce_sum(self.pi * self.act_mask, axis=1)       # sum all valid non spatial action prob
         action_prob = tf.reduce_sum(self.pi * acts_one_hot, axis=1)
-        action_log_prob = tf.log(action_prob / valid_action_prob_sum + 1e-8)
+        action_log_prob = tf.log(tf.maximum(action_prob / valid_action_prob_sum, self.log_epsilon))
     
         for act_type in actions.TYPES:
             indexes = tf.stack([tf.range(tf.shape(self.act_args[act_type.name])[0]), self.act_args[act_type.name]], axis=1)
-            arg_log_prob = tf.log(tf.gather_nd(self.args[act_type.name], indexes) + 1e-8)
+            arg_log_prob = tf.log(tf.maximum(tf.gather_nd(self.args[act_type.name], indexes), self.log_epsilon))
             action_log_prob += self.act_args_used[act_type.name] * arg_log_prob
-
-        cost_entropy = tf.reduce_mean(-tf.reduce_sum(self.pi * tf.log(self.pi + 1e-8), axis=1))
+        '''
+        '''
+        cost_entropy = tf.reduce_sum(-tf.reduce_sum(self.pi * tf.log(self.pi + 1e-8), axis=1))
         # args entropy
+        
         for act_type in actions.TYPES:
-            cost_entropy += tf.reduce_sum(-tf.reduce_sum(self.args[act_type.name] * tf.log(self.args[act_type.name] + 1e-8), axis=1) * self.act_args_used[act_type.name]) / tf.maximum(tf.reduce_sum(self.act_args_used[act_type.name]), 1.)
+            cost_entropy += tf.reduce_sum(-tf.reduce_sum(self.args[act_type.name] * tf.log(tf.maximum(self.args[act_type.name], self.log_epsilon)), axis=1) * self.act_args_used[act_type.name]) / tf.maximum(tf.reduce_sum(self.act_args_used[act_type.name]), 1.)
+        '''
 
-        cost_p = -tf.reduce_mean((self.rewards - tf.stop_gradient(self.value)) * action_log_prob)
-        cost_v = 0.5 * tf.reduce_mean(tf.square(self.rewards - self.value))
+        '''
+        entropy = -tf.reduce_sum(self.pi * tf.log(self.pi + 1e-8), axis=1)
+        for act_type in actions.TYPES:
+            entropy += -tf.reduce_sum(self.args[act_type.name] * tf.log(self.args[act_type.name] + 1e-8), axis=1) * self.act_args_used[act_type.name]
+        
+        cost_entropy = tf.reduce_sum(entropy, axis=0)
+        '''
+
+        cost_p = tf.reduce_sum((self.rewards - tf.stop_gradient(self.value)) * action_log_prob)
+        cost_v = 0.5 * tf.reduce_sum(tf.square(self.rewards - self.value))
         loss = cost_p - cost_entropy * self.var_beta + cost_v * self.vl_coef
         self.cost_p = cost_p
         self.cost_v = cost_v
@@ -200,9 +333,9 @@ class NetworkVP:
         elif Config.OPTIMIZER == "rmsprop":
             self.opt = tf.train.RMSPropOptimizer(
                 learning_rate=self.var_learning_rate,
-                decay=Config.RMSPROP_DECAY,
-                momentum=Config.RMSPROP_MOMENTUM,
-                epsilon=Config.RMSPROP_EPSILON
+                # decay=Config.RMSPROP_DECAY,
+                # momentum=Config.RMSPROP_MOMENTUM,
+                # epsilon=Config.RMSPROP_EPSILON
             )
         else:
             raise NotImplementedError
@@ -223,10 +356,12 @@ class NetworkVP:
         for idx, feature in enumerate(input_features):
             if feature.type == features.FeatureType.CATEGORICAL:
                 with tf.variable_scope("embedding", reuse=tf.AUTO_REUSE):
-                    embedding_table = tf.get_variable("{}".format(feature.name),
+                    embedding_table = tf.get_variable("{}_{}".format(input_name, feature.name),
                                         dtype=tf.float32,
                                         shape=[feature.scale, max(min(np.round(np.log2(feature.scale)), 10), 1)],
-                                        initializer=tf.glorot_uniform_initializer())
+                                        initializer=tf.glorot_normal_initializer())
+                    embedding_table = tf.concat((tf.zeros(shape=[1, max(min(np.round(np.log2(feature.scale)), 10), 1)]), embedding_table[1:, :]), 0)
+                    # embedding_table = tf.nn.relu(embedding_table)
                     out = tf.nn.embedding_lookup(embedding_table, tf.to_int32(tf.squeeze(split_features[idx], -1)))
             elif feature.type == features.FeatureType.SCALAR:
                 out = tf.log1p(split_features[idx])
@@ -253,12 +388,30 @@ class NetworkVP:
 
     def _non_spatial_argument(self, fc, size, name):
         temp = tf.layers.dense(fc, size,
-            # kernel_initializer=tf.glorot_uniform_initializer(),
-            kernel_initializer=tf.orthogonal_initializer(),
-            activation=tf.nn.softmax,
+            kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            # activation=tf.nn.softmax,
+            activation=None,
             name="arg_%s" % name
         )
+        # temp_softmax = (tf.nn.softmax(temp) + Config.MIN_POLICY) / (1.0 + Config.MIN_POLICY * size)
+        # return temp_softmax
         return temp
+
+    def _fully_conv_spatial_argument(self, state, name):
+        temp = tf.layers.conv2d(
+            state,
+            filters=1,
+            kernel_size=1,
+            strides=1,
+            kernel_initializer=tf.glorot_uniform_initializer(),
+            # kernel_initializer=tf.glorot_normal_initializer(),
+            # kernel_initializer=tf.orthogonal_initializer(),
+            activation=None,
+            padding="same",
+            name="arg_%s" % name
+        )
+        return tf.layers.flatten(temp)
 
     def _prepare_feed_dict(self, state_dict):
         feed_dict = {
@@ -312,7 +465,7 @@ class NetworkVP:
             base_actions.append(exp.action["base_action"])
             rewards.append(exp.reward)
             for act_type in actions.TYPES:
-                args[act_type.name].append(exp.action[act_type.name])
+                args[act_type.name].append(exp.action[act_type.name] if exp.action[act_type.name] != -1 else 0)
                 arg_used[act_type.name].append(float(exp.action[act_type.name] != -1))
 
         return screens, minimaps, nss, base_actions, avail_actions, rewards, args, arg_used

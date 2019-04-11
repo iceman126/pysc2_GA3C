@@ -2,9 +2,9 @@
 This is a reinforcement learning agent in pysc2 environment. It's based on [GA3C](https://github.com/NVlabs/GA3C)
 .
 
-[![StarCraft 2 MoveToBeacon Evalution](http://img.youtube.com/vi/N8FqFnDF4uM/0.jpg)](http://www.youtube.com/watch?v=N8FqFnDF4uM "StarCraft 2 MoveToBeacon Evalution")
+<a href="http://www.youtube.com/watch?v=N8FqFnDF4uM"><img src="http://img.youtube.com/vi/N8FqFnDF4uM/0.jpg" width="350"></a>&nbsp;&nbsp;
+<a href="http://www.youtube.com/watch?v=5LJd_5Y6g_o"><img src="http://img.youtube.com/vi/5LJd_5Y6g_o/0.jpg" width="350"></a>
 
-[![StarCraft 2 DefeatRoaches Evalution](http://img.youtube.com/vi/5LJd_5Y6g_o/0.jpg)](http://www.youtube.com/watch?v=5LJd_5Y6g_o "StarCraft 2 DefeatRoaches Evalution")
 
 Note: This agent could reach 25 mean score on MoveToBeacon mini-game (which is good), but on DefeatRoaches it could only get around 60 mean score (No matter using Atari-net or FullyConv-net). This may caused by bad hyper-parameters or off-policy update during training. However, the throughput is better than single-machine A3C and batched A2C.
 
